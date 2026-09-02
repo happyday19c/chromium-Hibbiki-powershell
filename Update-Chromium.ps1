@@ -80,7 +80,8 @@ try {
 
     New-Item -ItemType Directory -Path $BinPath -Force | Out-Null
     Write-Host "Copying Chromium files to $BinPath"
-    Copy-Item -LiteralPath (Join-Path $ChromeBinDirectory.FullName '*') -Destination $BinPath -Recurse -Force
+    Get-ChildItem -LiteralPath $ChromeBinDirectory.FullName -Force |
+        Copy-Item -Destination $BinPath -Recurse -Force
 
     Write-Host 'Chromium update completed successfully.'
 }

@@ -3,7 +3,7 @@
 [CmdletBinding()]
 param(
     [string]$DownloadUrl = 'https://github.com/Hibbiki/chromium-win64/releases/latest/download/chrome.7z',
-    [string]$InstallRoot = 'C:\Program Files\Chromium',
+    [string]$InstallRoot = '',
     [string]$SevenZipPath = 'C:\Program Files\7-Zip\7z.exe',
     [string]$LatestReleaseApiUrl = 'https://api.github.com/repos/Hibbiki/chromium-win64/releases/latest'
 )
@@ -41,6 +41,36 @@ function Get-LatestChromiumRelease {
     return $Release.tag_name
 }
 
+function ConvertTo-ChromiumNumericVersion {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Version
+    )
+
+    # GitHub release tags can include a Chromium revision suffix such as
+    # "-r123456". Compare only the dotted numeric product version.
+    $VersionWithoutRevision = $Version -replace '-r\d+.*$', ''
+    $NumericVersion = [regex]::Match($VersionWithoutRevision, '\d+(?:\.\d+){1,3}')
+    if (-not $NumericVersion.Success) {
+        return $null
+    }
+
+    try {
+        return [version]$NumericVersion.Value
+    }
+    catch {
+        return $null
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+    $InstallRoot = $PSScriptRoot
+    if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+        $InstallRoot = (Get-Location).Path
+    }
+    Write-Host "InstallRoot was empty; using the script location: $InstallRoot"
+}
+
 if (-not (Test-Path -LiteralPath $SevenZipPath -PathType Leaf)) {
     throw "7-Zip was not found at '$SevenZipPath'. Install 7-Zip or provide its executable path with -SevenZipPath."
 }
@@ -56,6 +86,15 @@ try {
     $LatestVersion = Get-LatestChromiumRelease -ReleaseApiUrl $LatestReleaseApiUrl
     Write-Host "Installed Chromium version: $InstalledVersion"
     Write-Host "Latest Chromium version:    $LatestVersion"
+
+    $InstalledNumericVersion = ConvertTo-ChromiumNumericVersion -Version $InstalledVersion
+    $LatestNumericVersion = ConvertTo-ChromiumNumericVersion -Version $LatestVersion
+    if (($null -ne $InstalledNumericVersion) -and
+        ($null -ne $LatestNumericVersion) -and
+        ($InstalledNumericVersion -eq $LatestNumericVersion)) {
+        Write-Host "Chromium is already up to date (numeric version: $InstalledNumericVersion). No update is required."
+        return
+    }
 
     New-Item -ItemType Directory -Path $TemporaryDirectory | Out-Null
     New-Item -ItemType Directory -Path $ExtractionPath | Out-Null
